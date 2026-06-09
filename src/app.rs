@@ -12,8 +12,8 @@ use crate::widgets::{
     settings_nav_row, settings_nav_row_with_icon, settings_page_header, spacing,
 };
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
+use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
 use cosmic::iced::{Length, Limits, Subscription, clipboard, window::Id};
-use cosmic::iced_winit::commands::popup::{destroy_popup, get_popup};
 use cosmic::prelude::*;
 use cosmic::widget;
 use futures_util::SinkExt;
@@ -299,7 +299,7 @@ impl AppModel {
                                     .size(space.space_s),
                             )
                             .class(cosmic::theme::Container::custom(
-                                |theme| cosmic::iced_widget::container::Style {
+                                |theme| cosmic::iced::widget::container::Style {
                                     icon_color: Some(theme.cosmic().palette.bright_orange.into()),
                                     ..Default::default()
                                 },
@@ -403,7 +403,7 @@ impl AppModel {
                                 )
                                 .class(
                                     cosmic::theme::Container::custom(|theme| {
-                                        cosmic::iced_widget::container::Style {
+                                        cosmic::iced::widget::container::Style {
                                             icon_color: Some(
                                                 theme.cosmic().palette.bright_orange.into(),
                                             ),
@@ -441,7 +441,7 @@ impl AppModel {
                             widget::icon::from_name("office-calendar-symbolic").size(space.space_m),
                         )
                         .push(widget::text::body(fl!("open-calendar")))
-                        .push(widget::horizontal_space())
+                        .push(widget::space::horizontal())
                         .spacing(space.space_xs)
                         .align_y(cosmic::iced::Alignment::Center)
                         .width(Length::Fill),
@@ -457,7 +457,7 @@ impl AppModel {
                         widget::icon::from_name("preferences-system-symbolic").size(space.space_m),
                     )
                     .push(widget::text::body(fl!("settings")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .spacing(space.space_xs)
                     .align_y(cosmic::iced::Alignment::Center)
                     .width(Length::Fill),
@@ -566,7 +566,7 @@ impl AppModel {
             ));
 
         content = content.push(calendars_section);
-        content = content.push(widget::vertical_space().height(space.space_xs));
+        content = content.push(widget::space::vertical().height(space.space_xs));
 
         // Display sections
         let display_section = widget::list_column()
@@ -585,7 +585,7 @@ impl AppModel {
             ));
 
         content = content.push(display_section);
-        content = content.push(widget::vertical_space().height(space.space_xs));
+        content = content.push(widget::space::vertical().height(space.space_xs));
 
         // ===== KEYBOARD SHORTCUT SECTION =====
         let shortcut_section = widget::list_column()
@@ -598,7 +598,7 @@ impl AppModel {
             ));
 
         content = content.push(shortcut_section);
-        content = content.push(widget::vertical_space().height(space.space_xs));
+        content = content.push(widget::space::vertical().height(space.space_xs));
 
         // ===== ABOUT SECTION =====
         let about_section = widget::list_column()
@@ -653,7 +653,7 @@ impl AppModel {
                                     .size(space.space_m),
                             )
                             .class(cosmic::theme::Container::custom(
-                                |theme| cosmic::iced_widget::container::Style {
+                                |theme| cosmic::iced::widget::container::Style {
                                     icon_color: Some(theme.cosmic().palette.bright_orange.into()),
                                     ..Default::default()
                                 },
@@ -696,11 +696,11 @@ impl AppModel {
                 && let Some(parsed_color) = parse_hex_color(color)
             {
                 row = row.push(
-                    widget::container(widget::Space::new(0, 0))
+                    widget::container(widget::Space::new())
                         .width(Length::Fixed(12.0))
                         .height(Length::Fixed(12.0))
                         .class(cosmic::theme::Container::custom(move |_theme| {
-                            cosmic::iced_widget::container::Style {
+                            cosmic::iced::widget::container::Style {
                                 background: Some(cosmic::iced::Background::Color(parsed_color)),
                                 border: cosmic::iced::Border {
                                     radius: 6.0.into(),
@@ -745,7 +745,7 @@ impl AppModel {
 
             row = row
                 .push(name_col)
-                .push(widget::horizontal_space())
+                .push(widget::space::horizontal())
                 .push(toggler);
 
             calendars_list = calendars_list.add(row);
@@ -781,7 +781,7 @@ impl AppModel {
                                     .size(space.space_s),
                             )
                             .class(cosmic::theme::Container::custom(
-                                |theme| cosmic::iced_widget::container::Style {
+                                |theme| cosmic::iced::widget::container::Style {
                                     icon_color: Some(theme.cosmic().palette.neutral_6.into()),
                                     ..Default::default()
                                 },
@@ -836,7 +836,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("join-button-visibility")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::dropdown(
                         join_options,
                         join_idx,
@@ -850,7 +850,7 @@ impl AppModel {
 
         // URL Patterns section
         let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
-        content = content.push(widget::vertical_space().height(space.space_s));
+        content = content.push(widget::space::vertical().height(space.space_s));
         content = content.push(widget::text::body(fl!("url-patterns")));
 
         // Pattern list
@@ -883,10 +883,10 @@ impl AppModel {
             .push(widget::button::standard(fl!("add-pattern")).on_press(Message::AddPattern));
 
         // URL patterns description
-        content = content.push(widget::vertical_space().height(space.space_xxs));
+        content = content.push(widget::space::vertical().height(space.space_xxs));
         content = content
             .push(widget::text::caption(fl!("url-patterns-description")).class(secondary_text));
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -930,7 +930,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("join-button-visibility")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::dropdown(
                         join_options,
                         join_idx,
@@ -944,7 +944,7 @@ impl AppModel {
 
         // URL Patterns section
         let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
-        content = content.push(widget::vertical_space().height(space.space_s));
+        content = content.push(widget::space::vertical().height(space.space_s));
         content = content.push(widget::text::body(fl!("url-patterns")));
 
         // Pattern list
@@ -977,10 +977,10 @@ impl AppModel {
             .push(widget::button::standard(fl!("add-pattern")).on_press(Message::AddPattern));
 
         // URL patterns description
-        content = content.push(widget::vertical_space().height(space.space_xxs));
+        content = content.push(widget::space::vertical().height(space.space_xxs));
         content = content
             .push(widget::text::caption(fl!("url-patterns-description")).class(secondary_text));
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -1015,7 +1015,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("display-format-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::dropdown(
                         display_format_options(),
                         format_idx,
@@ -1034,7 +1034,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("calendar-indicator-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::toggler(self.config.panel_calendar_indicator)
                             .on_toggle(Message::SetPanelCalendarIndicator),
@@ -1046,7 +1046,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("location-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::toggler(self.config.panel_show_location)
                             .on_toggle(Message::SetPanelShowLocation),
@@ -1058,7 +1058,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("hide-when-no-meetings")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::toggler(self.config.hide_when_no_meetings)
                             .on_toggle(Message::SetHideWhenNoMeetings),
@@ -1068,7 +1068,7 @@ impl AppModel {
             );
 
         content = content.push(formatting_list);
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -1094,9 +1094,10 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("upcoming-events-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::spin_button(
                         self.config.upcoming_events_count.to_string(),
+                        fl!("upcoming-events-section"),
                         i32::from(self.config.upcoming_events_count),
                         1,
                         0,
@@ -1108,7 +1109,7 @@ impl AppModel {
             );
 
         content = content.push(additional_list);
-        content = content.push(widget::vertical_space().height(space.space_xs));
+        content = content.push(widget::space::vertical().height(space.space_xs));
 
         // Formatting section
         content = content.push(widget::text::heading(fl!("formatting-section")));
@@ -1125,7 +1126,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("calendar-indicator-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::toggler(self.config.popup_calendar_indicator)
                             .on_toggle(Message::SetPopupCalendarIndicator),
@@ -1137,7 +1138,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("location-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::toggler(self.config.popup_show_location)
                             .on_toggle(Message::SetPopupShowLocation),
@@ -1147,7 +1148,7 @@ impl AppModel {
             );
 
         content = content.push(formatting_list);
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -1236,7 +1237,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("show-all-day-events")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::toggler(self.config.show_all_day_events)
                             .on_toggle(Message::SetShowAllDayEvents),
@@ -1248,7 +1249,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("in-progress-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::dropdown(
                         in_progress_options,
                         in_progress_idx,
@@ -1261,7 +1262,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("time-until-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::dropdown(
                         time_until_options,
                         time_until_idx,
@@ -1274,7 +1275,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("status-filter-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::dropdown(
                         status_options,
                         status_idx,
@@ -1289,7 +1290,7 @@ impl AppModel {
             filter_settings = filter_settings.add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("additional-emails-section")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::button::custom(
                             widget::row::with_capacity(2)
@@ -1312,10 +1313,10 @@ impl AppModel {
 
         // Description at bottom with secondary color
         let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
-        content = content.push(widget::vertical_space().height(space.space_s));
+        content = content.push(widget::space::vertical().height(space.space_s));
         content = content
             .push(widget::text::caption(fl!("filter-events-description")).class(secondary_text));
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -1376,11 +1377,11 @@ impl AppModel {
 
         // Description at bottom with secondary color
         let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
-        content = content.push(widget::vertical_space().height(space.space_s));
+        content = content.push(widget::space::vertical().height(space.space_s));
         content = content.push(
             widget::text::caption(fl!("additional-emails-description")).class(secondary_text),
         );
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -1432,7 +1433,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("auto-refresh")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::toggler(self.config.auto_refresh_enabled)
                             .on_toggle(Message::SetAutoRefresh),
@@ -1446,7 +1447,7 @@ impl AppModel {
             refresh_settings = refresh_settings.add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("refresh-interval")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::dropdown(
                         interval_options,
                         interval_idx,
@@ -1461,7 +1462,7 @@ impl AppModel {
 
         // Force sync manually button (centered, standard size)
         let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
-        content = content.push(widget::vertical_space().height(space.space_xs));
+        content = content.push(widget::space::vertical().height(space.space_xs));
 
         let sync_button = widget::button::standard(if self.is_refreshing {
             fl!("refreshing")
@@ -1486,10 +1487,10 @@ impl AppModel {
         );
 
         // Description at bottom with secondary color
-        content = content.push(widget::vertical_space().height(space.space_s));
+        content = content.push(widget::space::vertical().height(space.space_s));
         content =
             content.push(widget::text::caption(fl!("refresh-description")).class(secondary_text));
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -1539,7 +1540,7 @@ impl AppModel {
             .add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("calendar-app-show-button")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(
                         widget::toggler(self.config.show_calendar_button)
                             .on_toggle(Message::SetShowCalendarButton),
@@ -1553,7 +1554,7 @@ impl AppModel {
             settings_list = settings_list.add(
                 widget::row::with_capacity(3)
                     .push(widget::text::body(fl!("calendar-app-action")))
-                    .push(widget::horizontal_space())
+                    .push(widget::space::horizontal())
                     .push(widget::dropdown(
                         action_options,
                         action_idx,
@@ -1568,7 +1569,7 @@ impl AppModel {
                 settings_list = settings_list.add(
                     widget::row::with_capacity(2)
                         .push(widget::text::body(fl!("calendar-app-command-label")))
-                        .push(widget::horizontal_space())
+                        .push(widget::space::horizontal())
                         .align_y(cosmic::iced::Alignment::Center)
                         .width(Length::Fill),
                 );
@@ -1587,7 +1588,7 @@ impl AppModel {
                 settings_list = settings_list.add(
                     widget::row::with_capacity(2)
                         .push(widget::text::body(fl!("calendar-app-url-label")))
-                        .push(widget::horizontal_space())
+                        .push(widget::space::horizontal())
                         .align_y(cosmic::iced::Alignment::Center)
                         .width(Length::Fill),
                 );
@@ -1603,7 +1604,7 @@ impl AppModel {
         }
 
         content = content.push(settings_list);
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -1628,12 +1629,12 @@ impl AppModel {
         // Description
         content = content.push(widget::text::body(fl!("keyboard-shortcut-description")));
 
-        content = content.push(widget::vertical_space().height(space.space_xxs));
+        content = content.push(widget::space::vertical().height(space.space_xxs));
 
         // Instructions (second paragraph)
         content = content.push(widget::text::body(fl!("keyboard-shortcut-instructions")));
 
-        content = content.push(widget::vertical_space().height(space.space_xs));
+        content = content.push(widget::space::vertical().height(space.space_xs));
 
         // Command in a styled container (read-only text input for selectability)
         // Show different command based on whether we're running in Flatpak
@@ -1663,7 +1664,7 @@ impl AppModel {
             .class(cosmic::theme::Container::List),
         );
 
-        content = content.push(widget::vertical_space().height(space.space_s));
+        content = content.push(widget::space::vertical().height(space.space_s));
 
         // Open Settings button
         content = content.push(
@@ -1675,7 +1676,7 @@ impl AppModel {
             .align_x(cosmic::iced::alignment::Horizontal::Center),
         );
 
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         content.into()
     }
@@ -1708,7 +1709,7 @@ impl AppModel {
         );
 
         // Vertical space before icon
-        content = content.push(widget::vertical_space().height(space.space_m));
+        content = content.push(widget::space::vertical().height(space.space_m));
 
         // App icon (centered, large)
         content = content.push(widget::icon::from_name("com.dangrover.next-meeting-app").size(64));
@@ -1729,7 +1730,7 @@ impl AppModel {
             content.push(widget::text::body(fl!("author", author = author)).class(secondary_text));
 
         // Website and Report bug buttons
-        content = content.push(widget::vertical_space().height(space.space_s));
+        content = content.push(widget::space::vertical().height(space.space_s));
         content = content.push(
             widget::row::with_capacity(2)
                 .spacing(space.space_s)
@@ -1752,7 +1753,7 @@ impl AppModel {
         );
 
         // Vertical space at bottom
-        content = content.push(widget::vertical_space().height(space.space_l));
+        content = content.push(widget::space::vertical().height(space.space_l));
 
         content.into()
     }
@@ -1961,7 +1962,7 @@ impl cosmic::Application for AppModel {
             && filtered.is_empty()
             && !self.available_calendars.is_empty()
         {
-            return widget::container(widget::Space::new(0, 0))
+            return widget::container(widget::Space::new())
                 .width(Length::Shrink)
                 .into();
         }
@@ -2164,6 +2165,7 @@ impl cosmic::Application for AppModel {
     /// emit messages to the application through a channel. They may be conditionally
     /// activated by selectively appending to the subscription batch, and will
     /// continue to execute for the duration that they remain in the batch.
+    #[allow(clippy::too_many_lines)]
     fn subscription(&self) -> Subscription<Self::Message> {
         use std::hash::{Hash, Hasher};
 
@@ -2190,27 +2192,44 @@ impl cosmic::Application for AppModel {
 
         let mut subscriptions = vec![
             // Periodically read cached calendar and meeting data (every 60 seconds)
-            Subscription::run_with_id(
-                config_hash,
-                cosmic::iced::stream::channel(6, move |mut channel| async move {
-                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-                    loop {
-                        interval.tick().await;
-                        // Read cached calendars and meetings
-                        let calendars = crate::calendar::get_available_calendars().await;
-                        let _ = channel.send(Message::CalendarsLoaded(calendars)).await;
-                        let meetings = crate::calendar::get_upcoming_meetings(
-                            &enabled_uids,
-                            upcoming_count + 1,
-                            &additional_emails,
-                        )
-                        .await;
-                        let _ = channel.send(Message::MeetingsUpdated(meetings)).await;
-                        // Check for GOA accounts needing re-authentication
-                        let accounts = crate::calendar::check_accounts_needing_attention().await;
-                        let _ = channel.send(Message::AccountsChecked(accounts)).await;
-                    }
-                }),
+            Subscription::run_with(
+                (
+                    config_hash,
+                    enabled_uids.clone(),
+                    upcoming_count,
+                    additional_emails.clone(),
+                ),
+                |(_, enabled_uids, upcoming_count, additional_emails)| {
+                    let enabled_uids = enabled_uids.clone();
+                    let additional_emails = additional_emails.clone();
+                    let upcoming_count = *upcoming_count;
+                    cosmic::iced::stream::channel(
+                        6,
+                        move |mut channel: cosmic::iced::futures::channel::mpsc::Sender<
+                            Message,
+                        >| async move {
+                            let mut interval =
+                                tokio::time::interval(std::time::Duration::from_mins(1));
+                            loop {
+                                interval.tick().await;
+                                // Read cached calendars and meetings
+                                let calendars = crate::calendar::get_available_calendars().await;
+                                let _ = channel.send(Message::CalendarsLoaded(calendars)).await;
+                                let meetings = crate::calendar::get_upcoming_meetings(
+                                    &enabled_uids,
+                                    upcoming_count + 1,
+                                    &additional_emails,
+                                )
+                                .await;
+                                let _ = channel.send(Message::MeetingsUpdated(meetings)).await;
+                                // Check for GOA accounts needing re-authentication
+                                let accounts =
+                                    crate::calendar::check_accounts_needing_attention().await;
+                                let _ = channel.send(Message::AccountsChecked(accounts)).await;
+                            }
+                        },
+                    )
+                },
             ),
             // Watch for application configuration changes.
             self.core()
@@ -2221,52 +2240,68 @@ impl cosmic::Application for AppModel {
         // Add auto-refresh subscription if enabled
         if auto_refresh_enabled {
             let refresh_uids = self.config.enabled_calendar_uids.clone();
-            subscriptions.push(Subscription::run_with_id(
-                refresh_hash,
-                cosmic::iced::stream::channel(2, move |mut channel| async move {
-                    let interval_secs = u64::from(auto_refresh_interval) * 60;
-                    let mut interval =
-                        tokio::time::interval(std::time::Duration::from_secs(interval_secs));
-                    // Skip the first immediate tick
-                    interval.tick().await;
-                    loop {
-                        interval.tick().await;
-                        // Trigger a refresh from remote servers
-                        crate::calendar::refresh_calendars(&refresh_uids).await;
-                        // Signal that refresh started (the 60-second subscription will pick up new data)
-                        let _ = channel.send(Message::RefreshCalendars).await;
-                    }
-                }),
+            subscriptions.push(Subscription::run_with(
+                (refresh_hash, refresh_uids, auto_refresh_interval),
+                |(_, refresh_uids, auto_refresh_interval)| {
+                    let refresh_uids = refresh_uids.clone();
+                    let auto_refresh_interval = *auto_refresh_interval;
+                    cosmic::iced::stream::channel(
+                        2,
+                        move |mut channel: cosmic::iced::futures::channel::mpsc::Sender<
+                            Message,
+                        >| async move {
+                            let interval_secs = u64::from(auto_refresh_interval) * 60;
+                            let mut interval = tokio::time::interval(
+                                std::time::Duration::from_secs(interval_secs),
+                            );
+                            // Skip the first immediate tick
+                            interval.tick().await;
+                            loop {
+                                interval.tick().await;
+                                // Trigger a refresh from remote servers
+                                crate::calendar::refresh_calendars(&refresh_uids).await;
+                                // Signal that refresh started (the 60-second subscription will pick up new data)
+                                let _ = channel.send(Message::RefreshCalendars).await;
+                            }
+                        },
+                    )
+                },
             ));
         }
 
         // Watch for D-Bus PropertiesChanged signals from EDS calendars
         // This detects when calendars are updated after a sync (by us or external apps)
         let watch_uids = self.config.enabled_calendar_uids.clone();
-        subscriptions.push(Subscription::run_with_id(
-            ("calendar-changes", config_hash),
-            cosmic::iced::stream::channel(4, move |mut channel| async move {
-                let (sender, mut receiver) = tokio::sync::mpsc::channel::<()>(4);
+        subscriptions.push(Subscription::run_with(
+            ("calendar-changes", config_hash, watch_uids),
+            |(_, _, watch_uids)| {
+                let watch_uids = watch_uids.clone();
+                cosmic::iced::stream::channel(
+                    4,
+                    move |mut channel: cosmic::iced::futures::channel::mpsc::Sender<Message>| async move {
+                    let (sender, mut receiver) = tokio::sync::mpsc::channel::<()>(4);
 
-                // Spawn the watcher in a separate task
-                let watch_task =
-                    tokio::spawn(crate::calendar::watch_calendar_changes(watch_uids, sender));
+                    // Spawn the watcher in a separate task
+                    let watch_task =
+                        tokio::spawn(crate::calendar::watch_calendar_changes(watch_uids, sender));
 
-                // Forward messages from the watcher to the iced channel
-                while receiver.recv().await.is_some() {
-                    let _ = channel.send(Message::CalendarChanged).await;
-                }
+                    // Forward messages from the watcher to the iced channel
+                    while receiver.recv().await.is_some() {
+                        let _ = channel.send(Message::CalendarChanged).await;
+                    }
 
-                // Clean up if the watcher exits
-                watch_task.abort();
-            }),
+                    // Clean up if the watcher exits
+                    watch_task.abort();
+                })
+            },
         ));
 
         // Watch for new/removed calendar sources via ObjectManager signals
         // Detects when the user adds or removes a calendar account
-        subscriptions.push(Subscription::run_with_id(
-            "source-changes",
-            cosmic::iced::stream::channel(2, move |mut channel| async move {
+        subscriptions.push(Subscription::run_with("source-changes", |_| {
+            cosmic::iced::stream::channel(
+                2,
+                move |mut channel: cosmic::iced::futures::channel::mpsc::Sender<Message>| async move {
                 let (sender, mut receiver) = tokio::sync::mpsc::channel::<()>(2);
 
                 let watch_task = tokio::spawn(crate::calendar::watch_source_changes(sender));
@@ -2276,14 +2311,15 @@ impl cosmic::Application for AppModel {
                 }
 
                 watch_task.abort();
-            }),
-        ));
+            })
+        }));
 
         // Watch for system resume (from sleep) and session unlock events
         // Uses org.freedesktop.login1 on the system bus; fails gracefully on non-systemd systems
-        subscriptions.push(Subscription::run_with_id(
-            "system-resume",
-            cosmic::iced::stream::channel(2, move |mut channel| async move {
+        subscriptions.push(Subscription::run_with("system-resume", |_| {
+            cosmic::iced::stream::channel(
+                2,
+                move |mut channel: cosmic::iced::futures::channel::mpsc::Sender<Message>| async move {
                 let (sender, mut receiver) = tokio::sync::mpsc::channel::<()>(2);
 
                 // Spawn the watcher in a separate task
@@ -2296,8 +2332,8 @@ impl cosmic::Application for AppModel {
 
                 // Clean up if the watcher exits
                 watch_task.abort();
-            }),
-        ));
+            })
+        }));
 
         Subscription::batch(subscriptions)
     }
@@ -2766,7 +2802,7 @@ impl cosmic::Application for AppModel {
         Task::none()
     }
 
-    fn style(&self) -> Option<cosmic::iced_runtime::Appearance> {
+    fn style(&self) -> Option<cosmic::iced::theme::Style> {
         Some(cosmic::applet::style())
     }
 }

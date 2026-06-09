@@ -69,7 +69,7 @@ async fn list_calendars(conn: &Connection) -> Result<(), Box<dyn std::error::Err
 
     let reply = proxy.call_method("GetManagedObjects", &()).await?;
     let objects: HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>> =
-        reply.body()?;
+        reply.body().deserialize()?;
 
     println!("{:<45} {:<30} Type", "UID", "Display Name");
     println!("{}", "-".repeat(90));
@@ -77,7 +77,7 @@ async fn list_calendars(conn: &Connection) -> Result<(), Box<dyn std::error::Err
     for (_path, interfaces) in objects {
         if let Some(props) = interfaces.get("org.gnome.evolution.dataserver.Source") {
             let uid = props.get("UID").and_then(|v| {
-                if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+                if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                     Some(s.to_string())
                 } else {
                     None
@@ -85,7 +85,7 @@ async fn list_calendars(conn: &Connection) -> Result<(), Box<dyn std::error::Err
             });
 
             let data = props.get("Data").and_then(|v| {
-                if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+                if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                     Some(s.to_string())
                 } else {
                     None
@@ -242,7 +242,7 @@ async fn get_calendar_events(
     .await?;
 
     let reply = factory.call_method("OpenCalendar", &(uid,)).await?;
-    let (calendar_path, bus_name): (String, String) = reply.body()?;
+    let (calendar_path, bus_name): (String, String) = reply.body().deserialize()?;
 
     let calendar = zbus::Proxy::new(
         conn,
@@ -256,7 +256,7 @@ async fn get_calendar_events(
     let _ = calendar.call_method("Open", &()).await;
 
     let reply = calendar.call_method("GetObjectList", &("",)).await?;
-    let events: Vec<String> = reply.body()?;
+    let events: Vec<String> = reply.body().deserialize()?;
 
     Ok(events)
 }
@@ -326,7 +326,7 @@ async fn refresh_calendar(conn: &Connection, uid: &str) -> Result<(), Box<dyn st
     .await?;
 
     let reply = factory.call_method("OpenCalendar", &(uid,)).await?;
-    let (calendar_path, bus_name): (String, String) = reply.body()?;
+    let (calendar_path, bus_name): (String, String) = reply.body().deserialize()?;
     println!("Opened: path={calendar_path} bus={bus_name}");
 
     let calendar = zbus::Proxy::new(
@@ -352,7 +352,7 @@ async fn refresh_calendar(conn: &Connection, uid: &str) -> Result<(), Box<dyn st
 
     match calendar.call_method("GetObjectList", &("",)).await {
         Ok(reply) => {
-            let events: Vec<String> = reply.body()?;
+            let events: Vec<String> = reply.body().deserialize()?;
             println!("Events after refresh: {}", events.len());
         }
         Err(e) => println!("GetObjectList error: {e}"),

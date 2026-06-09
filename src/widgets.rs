@@ -7,7 +7,7 @@ use crate::fl;
 use crate::formatting::parse_hex_color;
 use cosmic::cosmic_theme;
 use cosmic::iced::Length;
-use cosmic::iced_core::id;
+use cosmic::iced::core::id;
 use cosmic::prelude::*;
 use cosmic::widget;
 
@@ -30,9 +30,10 @@ pub fn email_input_id(idx: usize) -> id::Id {
 }
 
 /// Secondary text style for dimmed/muted text appearance
-pub fn secondary_text_style(theme: &cosmic::Theme) -> cosmic::iced_widget::text::Style {
-    cosmic::iced_widget::text::Style {
+pub fn secondary_text_style(theme: &cosmic::Theme) -> cosmic::iced::widget::text::Style {
+    cosmic::iced::widget::text::Style {
         color: Some(theme.cosmic().palette.neutral_6.into()),
+        ..Default::default()
     }
 }
 
@@ -69,7 +70,7 @@ pub fn settings_nav_row<'a, M: Clone + 'static>(
         widget::container(
             widget::row::with_capacity(4)
                 .push(widget::text::body(label))
-                .push(widget::horizontal_space())
+                .push(widget::space::horizontal())
                 .push(widget::text::body(summary))
                 .push(widget::icon::from_name("go-next-symbolic").size(16).icon())
                 .spacing(space.space_s)
@@ -102,7 +103,7 @@ pub fn settings_nav_row_with_icon<'a, M: Clone + 'static>(
                         .symbolic(true),
                 )
                 .push(widget::text::body(label))
-                .push(widget::horizontal_space())
+                .push(widget::space::horizontal())
                 .push(widget::text::body(summary))
                 .push(widget::icon::from_name("go-next-symbolic").size(16).icon())
                 .spacing(space.space_s)
@@ -131,11 +132,11 @@ pub fn calendar_color_dot<'a, M: 'a>(
     let color = parse_hex_color(color_hex)?;
     let calendar_name = calendar.display_name.clone();
 
-    let dot = widget::container(widget::Space::new(0, 0))
+    let dot = widget::container(widget::Space::new())
         .width(Length::Fixed(size))
         .height(Length::Fixed(size))
         .class(cosmic::theme::Container::custom(move |_theme| {
-            cosmic::iced_widget::container::Style {
+            cosmic::iced::widget::container::Style {
                 background: Some(cosmic::iced::Background::Color(color)),
                 border: cosmic::iced::Border {
                     radius: (size / 2.0).into(),

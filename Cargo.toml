@@ -20,7 +20,7 @@ futures-util = "0.3.31"
 i18n-embed-fl = "0.10"
 rust-embed = "8.7.2"
 tokio = { version = "1.48.0", features = ["full"] }
-zbus = { version = "3.14", features = ["tokio", "xml"] }
+zbus = { version = "5", features = ["tokio"] }
 calcard = "0.3"
 chrono = "0.4"
 chrono-tz = { version = "0.10", features = ["case-insensitive"] }

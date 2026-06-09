@@ -96,8 +96,9 @@ pub async fn check_accounts_needing_attention() -> Vec<AccountNeedingAttention> 
     let Ok(reply) = proxy.call_method("GetManagedObjects", &()).await else {
         return Vec::new();
     };
-    let Ok(objects) =
-        reply.body::<HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>>()
+    let Ok(objects) = reply
+        .body()
+        .deserialize::<HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>>()
     else {
         return Vec::new();
     };
@@ -117,7 +118,7 @@ pub async fn check_accounts_needing_attention() -> Vec<AccountNeedingAttention> 
         // Check if CalendarDisabled
         let calendar_disabled = account.get("CalendarDisabled").is_some_and(|v| {
             v.downcast_ref::<Value>()
-                .is_some_and(|val| matches!(val, Value::Bool(true)))
+                .is_ok_and(|val| matches!(val, Value::Bool(true)))
         });
         if calendar_disabled {
             continue;
@@ -126,7 +127,7 @@ pub async fn check_accounts_needing_attention() -> Vec<AccountNeedingAttention> 
         // Check AttentionNeeded
         let attention_needed = account.get("AttentionNeeded").is_some_and(|v| {
             v.downcast_ref::<Value>()
-                .is_some_and(|val| matches!(val, Value::Bool(true)))
+                .is_ok_and(|val| matches!(val, Value::Bool(true)))
         });
         if !attention_needed {
             continue;
@@ -135,7 +136,7 @@ pub async fn check_accounts_needing_attention() -> Vec<AccountNeedingAttention> 
         let identity = account
             .get("PresentationIdentity")
             .and_then(|v| {
-                if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+                if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                     Some(s.to_string())
                 } else {
                     None
@@ -202,8 +203,9 @@ pub async fn refresh_source_backends() {
     let Ok(reply) = om_proxy.call_method("GetManagedObjects", &()).await else {
         return;
     };
-    let Ok(objects) =
-        reply.body::<HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>>()
+    let Ok(objects) = reply
+        .body()
+        .deserialize::<HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>>()
     else {
         return;
     };
@@ -215,7 +217,7 @@ pub async fn refresh_source_backends() {
 
         // Check for [Collection] section in the Data property
         let is_collection = source_props.get("Data").is_some_and(|v| {
-            if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+            if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                 s.contains("[Collection]")
             } else {
                 false
@@ -227,7 +229,7 @@ pub async fn refresh_source_backends() {
         }
 
         let Some(uid) = source_props.get("UID").and_then(|v| {
-            if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+            if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                 Some(s.to_string())
             } else {
                 None
@@ -278,7 +280,7 @@ pub async fn refresh_calendars(enabled_uids: &[String]) {
             .call_method("OpenCalendar", &(source_uid.as_str(),))
             .await
         {
-            Ok(reply) => match reply.body::<(String, String)>() {
+            Ok(reply) => match reply.body().deserialize::<(String, String)>() {
                 Ok((path, bus)) => (path, bus),
                 Err(_) => continue,
             },
@@ -345,7 +347,7 @@ pub async fn watch_calendar_changes(
             .call_method("OpenCalendar", &(source_uid.as_str(),))
             .await
         {
-            Ok(reply) => match reply.body::<(String, String)>() {
+            Ok(reply) => match reply.body().deserialize::<(String, String)>() {
                 Ok((path, bus)) => (path, bus),
                 Err(_) => continue,
             },
@@ -505,7 +507,8 @@ async fn watch_prepare_for_sleep(conn: Connection, sender: tokio::sync::mpsc::Se
     while let Some(signal) = stream.next().await {
         // PrepareForSleep has a boolean argument: true = going to sleep, false = waking up
         if signal
-            .body::<bool>()
+            .body()
+            .deserialize::<bool>()
             .is_ok_and(|going_to_sleep| !going_to_sleep)
         {
             // System just woke up
@@ -534,7 +537,7 @@ async fn watch_session_unlock(conn: Connection, sender: tokio::sync::mpsc::Sende
         .call_method("GetSessionByPID", &(std::process::id(),))
         .await
     {
-        Ok(reply) => match reply.body::<zvariant::OwnedObjectPath>() {
+        Ok(reply) => match reply.body().deserialize::<zvariant::OwnedObjectPath>() {
             Ok(path) => path.to_string(),
             Err(_) => return,
         },
@@ -629,7 +632,7 @@ async fn get_meetings_from_dbus(
             .call_method("OpenCalendar", &(source_uid.as_str(),))
             .await
         {
-            Ok(reply) => match reply.body::<(String, String)>() {
+            Ok(reply) => match reply.body().deserialize::<(String, String)>() {
                 Ok((path, bus)) => (path, bus),
                 Err(_) => continue,
             },
@@ -691,7 +694,7 @@ async fn get_meetings_from_dbus(
             .call_method("GetObjectList", &(query.as_str(),))
             .await
         {
-            Ok(reply) => match reply.body::<Vec<String>>() {
+            Ok(reply) => match reply.body().deserialize::<Vec<String>>() {
                 Ok(objects) => objects,
                 Err(_) => continue,
             },
@@ -883,7 +886,7 @@ async fn get_calendar_source_uids(conn: &Connection) -> Option<Vec<String>> {
         .ok()?;
 
     let objects: HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>> =
-        reply.body().ok()?;
+        reply.body().deserialize().ok()?;
 
     let mut source_uids = Vec::new();
 
@@ -892,7 +895,7 @@ async fn get_calendar_source_uids(conn: &Connection) -> Option<Vec<String>> {
         if let Some(source_props) = interfaces.get("org.gnome.evolution.dataserver.Source") {
             // Get the UID
             let uid = source_props.get("UID").and_then(|v| {
-                if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+                if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                     Some(s.to_string())
                 } else {
                     None
@@ -901,7 +904,7 @@ async fn get_calendar_source_uids(conn: &Connection) -> Option<Vec<String>> {
 
             // Get the Data (source configuration) and check for [Calendar] section
             let has_calendar = source_props.get("Data").is_some_and(|v| {
-                if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+                if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                     s.contains("[Calendar]")
                 } else {
                     false
@@ -939,7 +942,7 @@ async fn get_calendars_from_dbus(conn: &Connection) -> Option<Vec<CalendarInfo>>
         .ok()?;
 
     let objects: HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>> =
-        reply.body().ok()?;
+        reply.body().deserialize().ok()?;
 
     let mut calendars = Vec::new();
 
@@ -947,7 +950,7 @@ async fn get_calendars_from_dbus(conn: &Connection) -> Option<Vec<CalendarInfo>>
         if let Some(source_props) = interfaces.get("org.gnome.evolution.dataserver.Source") {
             // Get the UID
             let uid = source_props.get("UID").and_then(|v| {
-                if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+                if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                     Some(s.to_string())
                 } else {
                     None
@@ -956,7 +959,7 @@ async fn get_calendars_from_dbus(conn: &Connection) -> Option<Vec<CalendarInfo>>
 
             // Get the Data field and extract DisplayName and check for [Calendar]
             let data = source_props.get("Data").and_then(|v| {
-                if let Some(Value::Str(s)) = v.downcast_ref::<Value>() {
+                if let Ok(Value::Str(s)) = v.downcast_ref::<Value>() {
                     Some(s.to_string())
                 } else {
                     None
@@ -993,7 +996,8 @@ async fn get_calendars_from_dbus(conn: &Connection) -> Option<Vec<CalendarInfo>>
             if let Ok(reply) = factory_proxy
                 .call_method("OpenCalendar", &(cal.uid.as_str(),))
                 .await
-                && let Ok((calendar_path, bus_name)) = reply.body::<(String, String)>()
+                && let Ok((calendar_path, bus_name)) =
+                    reply.body().deserialize::<(String, String)>()
                 && let Ok(cal_proxy) = zbus::Proxy::new(
                     conn,
                     bus_name.as_str(),
