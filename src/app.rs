@@ -50,6 +50,8 @@ pub struct AppModel {
     eds_available: bool,
     /// Online accounts that need re-authentication.
     accounts_needing_attention: Vec<crate::calendar::AccountNeedingAttention>,
+    /// Action selected in the keyboard-shortcut page's dropdown (UI-only).
+    shortcut_action: ShortcutAction,
 }
 
 /// Navigation state for popup pages
@@ -67,8 +69,54 @@ pub enum PopupPage {
     PopupDisplaySettings,
     PanelJoinButtonSettings,
     PopupJoinButtonSettings,
+    SchedulingHelperSettings,
     KeyboardShortcut,
     About,
+}
+
+/// Actions that can be bound to a global keyboard shortcut, each mapping to a
+/// CLI flag the user binds in COSMIC's keyboard settings.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ShortcutAction {
+    /// Open the applet's panel popup (signals the running applet over D-Bus).
+    #[default]
+    OpenMenu,
+    /// Join/open the next meeting's URL.
+    NextMeeting,
+    /// Open the Scheduling Helper window.
+    SchedulingHelper,
+}
+
+impl ShortcutAction {
+    /// The CLI flag this action maps to.
+    fn flag(self) -> &'static str {
+        match self {
+            ShortcutAction::OpenMenu => "--open-menu",
+            ShortcutAction::NextMeeting => "--join-next",
+            ShortcutAction::SchedulingHelper => "--scheduling-helper",
+        }
+    }
+
+    /// The localized dropdown label.
+    fn label(self) -> String {
+        match self {
+            ShortcutAction::OpenMenu => fl!("shortcut-action-open-menu"),
+            ShortcutAction::NextMeeting => fl!("shortcut-action-next-meeting"),
+            ShortcutAction::SchedulingHelper => fl!("shortcut-action-scheduling-helper"),
+        }
+    }
+}
+
+impl AppModel {
+    /// Actions offered in the keyboard-shortcut dropdown. The Scheduling Helper
+    /// only appears when its feature is enabled.
+    fn available_shortcut_actions(&self) -> Vec<ShortcutAction> {
+        let mut actions = vec![ShortcutAction::OpenMenu, ShortcutAction::NextMeeting];
+        if self.config.scheduling_helper_enabled {
+            actions.push(ShortcutAction::SchedulingHelper);
+        }
+        actions
+    }
 }
 
 impl AppModel {
@@ -481,6 +529,22 @@ impl AppModel {
             );
         }
 
+        // Optional Scheduling Helper entry (off by default).
+        if self.config.scheduling_helper_enabled {
+            content = content.push(
+                cosmic::applet::menu_button(
+                    widget::row::with_capacity(3)
+                        .push(widget::icon::from_name("mail-send-symbolic").size(space.space_m))
+                        .push(widget::text::body(fl!("scheduling-helper")))
+                        .push(widget::space::horizontal())
+                        .spacing(space.space_xs)
+                        .align_y(cosmic::iced::Alignment::Center)
+                        .width(Length::Fill),
+                )
+                .on_press(Message::OpenSchedulingHelper),
+            );
+        }
+
         content = content.push(
             cosmic::applet::menu_button(
                 widget::row::with_capacity(3)
@@ -616,6 +680,24 @@ impl AppModel {
             ));
 
         content = content.push(display_section);
+        content = content.push(widget::space::vertical().height(space.space_xs));
+
+        // ===== FEATURES SECTION =====
+        let scheduling_summary = if self.config.scheduling_helper_enabled {
+            fl!("on")
+        } else {
+            fl!("off")
+        };
+        let features_section = widget::list_column()
+            .list_item_padding([space.space_xxs, space.space_xs])
+            .add(settings_nav_row_with_icon(
+                "mail-send-symbolic",
+                fl!("scheduling-section"),
+                scheduling_summary,
+                Message::Navigate(PopupPage::SchedulingHelperSettings),
+            ));
+
+        content = content.push(features_section);
         content = content.push(widget::space::vertical().height(space.space_xs));
 
         // ===== KEYBOARD SHORTCUT SECTION =====
@@ -1644,8 +1726,70 @@ impl AppModel {
         content.into()
     }
 
+    /// Scheduling Helper settings page
+    fn view_scheduling_helper_settings_page(&self) -> Element<'_, Message> {
+        let space = spacing();
+        let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
+        let mut content = widget::column::with_capacity(6)
+            .padding(space.space_xs)
+            .spacing(space.space_xs)
+            .width(Length::Fill);
+
+        content = content.push(settings_page_header(
+            fl!("settings"),
+            fl!("scheduling-section"),
+            Message::Navigate(PopupPage::Settings),
+        ));
+
+        // Group 1: the on/off switch.
+        let enable_group = widget::list_column()
+            .list_item_padding([space.space_xxs, space.space_xs])
+            .add(
+                widget::row::with_capacity(3)
+                    .push(widget::text::body(fl!("scheduling-enable")))
+                    .push(widget::space::horizontal())
+                    .push(
+                        widget::toggler(self.config.scheduling_helper_enabled)
+                            .on_toggle(Message::SetSchedulingHelperEnabled),
+                    )
+                    .align_y(cosmic::iced::Alignment::Center)
+                    .width(Length::Fill),
+            );
+        content = content.push(enable_group);
+        content = content.push(
+            widget::text::caption(fl!("scheduling-helper-description")).class(secondary_text),
+        );
+        content = content.push(widget::space::vertical().height(space.space_xs));
+
+        // Group 2: window mode.
+        let window_options = vec![
+            fl!("scheduling-window-fixed"),
+            fl!("scheduling-window-resizable"),
+        ];
+        let window_idx = Some(usize::from(self.config.scheduling_helper_resizable));
+        let window_group = widget::list_column()
+            .list_item_padding([space.space_xxs, space.space_xs])
+            .add(
+                widget::row::with_capacity(3)
+                    .push(widget::text::body(fl!("scheduling-window-mode")))
+                    .push(widget::space::horizontal())
+                    .push(widget::dropdown(
+                        window_options,
+                        window_idx,
+                        Message::SetSchedulingHelperWindowMode,
+                    ))
+                    .align_y(cosmic::iced::Alignment::Center)
+                    .width(Length::Fill),
+            );
+        content = content.push(window_group);
+        content = content.push(
+            widget::text::caption(fl!("scheduling-window-description")).class(secondary_text),
+        );
+
+        content.into()
+    }
+
     /// Keyboard shortcut setup page
-    #[allow(clippy::unused_self)]
     fn view_keyboard_shortcut_page(&self) -> Element<'_, Message> {
         let space = spacing();
 
@@ -1671,12 +1815,38 @@ impl AppModel {
 
         content = content.push(widget::space::vertical().height(space.space_xs));
 
-        // Command in a styled container (read-only text input for selectability)
-        // Show different command based on whether we're running in Flatpak
-        let command: &'static str = if std::env::var("FLATPAK_ID").is_ok() {
-            "flatpak run com.dangrover.next-meeting-app --join-next"
+        // Action picker: which command the shortcut should run.
+        let actions = self.available_shortcut_actions();
+        let selected = actions
+            .iter()
+            .position(|a| *a == self.shortcut_action)
+            .unwrap_or(0);
+        let action = actions.get(selected).copied().unwrap_or_default();
+        let action_options: Vec<String> = actions.iter().map(|a| a.label()).collect();
+        content = content.push(
+            widget::row::with_capacity(3)
+                .spacing(space.space_s)
+                .align_y(cosmic::iced::Alignment::Center)
+                .push(widget::text::body(fl!("shortcut-action-label")))
+                .push(widget::space::horizontal())
+                .push(widget::dropdown(
+                    action_options,
+                    Some(selected),
+                    Message::SetShortcutAction,
+                )),
+        );
+
+        content = content.push(widget::space::vertical().height(space.space_xs));
+
+        // Command in a styled container (read-only text input for selectability).
+        // The binary differs in Flatpak; the flag depends on the selected action.
+        let command = if std::env::var("FLATPAK_ID").is_ok() {
+            format!(
+                "flatpak run com.dangrover.next-meeting-app {}",
+                action.flag()
+            )
         } else {
-            "cosmic-ext-applet-next-meeting --join-next"
+            format!("cosmic-ext-applet-next-meeting {}", action.flag())
         };
         content = content.push(
             widget::container(
@@ -1684,15 +1854,14 @@ impl AppModel {
                     .spacing(space.space_s)
                     .align_y(cosmic::iced::Alignment::Center)
                     .push(
-                        widget::text_input("", command)
-                            .on_input(|_| Message::Noop)
+                        widget::text(command.clone())
                             .font(cosmic::iced::Font::MONOSPACE)
                             .width(Length::Fill),
                     )
                     .push(
                         widget::button::text(fl!("keyboard-shortcut-copy"))
                             .class(cosmic::theme::Button::Standard)
-                            .on_press(Message::CopyToClipboard(command.to_string())),
+                            .on_press(Message::CopyToClipboard(command)),
                     ),
             )
             .padding(space.space_s)
@@ -1884,6 +2053,14 @@ pub enum Message {
     SystemResumed,
     SetHideWhenNoMeetings(bool),
     OpenCosmicSettings,
+    /// Toggle the Scheduling Helper menu entry on/off (settings).
+    SetSchedulingHelperEnabled(bool),
+    /// Choose the Scheduling Helper window mode (0 = fixed popup, 1 = resizable).
+    SetSchedulingHelperWindowMode(usize),
+    /// Choose which action the keyboard-shortcut page is configuring.
+    SetShortcutAction(usize),
+    /// Launch the Scheduling Helper as a separate window process.
+    OpenSchedulingHelper,
     Noop,
 }
 
@@ -2184,6 +2361,7 @@ impl cosmic::Application for AppModel {
             PopupPage::PopupDisplaySettings => self.view_popup_display_settings_page(),
             PopupPage::PanelJoinButtonSettings => self.view_panel_join_button_settings_page(),
             PopupPage::PopupJoinButtonSettings => self.view_popup_join_button_settings_page(),
+            PopupPage::SchedulingHelperSettings => self.view_scheduling_helper_settings_page(),
             PopupPage::KeyboardShortcut => self.view_keyboard_shortcut_page(),
             PopupPage::About => self.view_about_page(),
         };
@@ -2376,6 +2554,23 @@ impl cosmic::Application for AppModel {
                 // Clean up if the watcher exits
                 watch_task.abort();
             })
+        }));
+
+        // Serve the D-Bus control interface so an external `--open-menu`
+        // invocation (e.g. a keyboard shortcut) can open the panel popup.
+        subscriptions.push(Subscription::run_with("menu-control", |_| {
+            cosmic::iced::stream::channel(
+                2,
+                move |mut channel: cosmic::iced::futures::channel::mpsc::Sender<Message>| async move {
+                    let (sender, mut receiver) = tokio::sync::mpsc::channel::<()>(2);
+                    // Hold the connection alive for as long as we forward calls.
+                    if let Ok(_conn) = crate::ipc::serve(sender).await {
+                        while receiver.recv().await.is_some() {
+                            let _ = channel.send(Message::TogglePopup).await;
+                        }
+                    }
+                },
+            )
         }));
 
         Subscription::batch(subscriptions)
@@ -2714,6 +2909,33 @@ impl cosmic::Application for AppModel {
                 let _ = std::process::Command::new("cosmic-settings")
                     .arg("keyboard")
                     .spawn();
+            }
+            Message::SetSchedulingHelperEnabled(enabled) => {
+                self.config.scheduling_helper_enabled = enabled;
+                self.save_config();
+            }
+            Message::SetSchedulingHelperWindowMode(idx) => {
+                self.config.scheduling_helper_resizable = idx == 1;
+                self.save_config();
+            }
+            Message::SetShortcutAction(idx) => {
+                if let Some(action) = self.available_shortcut_actions().get(idx) {
+                    self.shortcut_action = *action;
+                }
+            }
+            Message::OpenSchedulingHelper => {
+                // Launch the helper as its own process (see scheduling_app.rs for
+                // why a separate window process rather than an in-applet window).
+                if let Ok(exe) = std::env::current_exe() {
+                    let _ = std::process::Command::new(exe)
+                        .arg("--scheduling-helper")
+                        .spawn();
+                }
+                // Close the popup now that we've handed off to the window.
+                if let Some(p) = self.popup.take() {
+                    self.current_page = PopupPage::Main;
+                    return destroy_popup(p);
+                }
             }
             Message::Noop => {}
             Message::AccountsChecked(accounts) => {

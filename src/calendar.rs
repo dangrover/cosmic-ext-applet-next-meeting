@@ -620,6 +620,54 @@ pub async fn get_upcoming_meetings(
     get_meetings_from_dbus(&conn, enabled_uids, limit.max(1), additional_emails).await
 }
 
+/// A timed calendar event to display as a block in the Scheduling Helper grid.
+#[derive(Debug, Clone)]
+pub struct CalendarEventBlock {
+    pub start: DateTime<Local>,
+    pub end: DateTime<Local>,
+    pub title: String,
+    /// Calendar color as a hex string (e.g. `#aabbcc`), if the source has one.
+    pub color: Option<String>,
+}
+
+/// Fetch timed calendar events over the next `days` to draw as blocks in the
+/// Scheduling Helper week grid.
+///
+/// Includes each event's title and its calendar's color. All-day events are
+/// excluded (they don't map to a time band), as are declined events. Reuses the
+/// normal meeting query (which already spans 30 days) with a generous result cap.
+pub async fn get_event_blocks(
+    enabled_uids: &[String],
+    additional_emails: &[String],
+    days: u32,
+) -> Vec<CalendarEventBlock> {
+    // Resolve a color per calendar so events can be tinted to match.
+    let discovery = get_available_calendars().await;
+    let color_for = |uid: &str| {
+        discovery
+            .calendars
+            .iter()
+            .find(|c| c.uid == uid)
+            .and_then(|c| c.color.clone())
+    };
+
+    let meetings = get_upcoming_meetings(enabled_uids, 1000, additional_emails).await;
+    let now = Local::now();
+    let horizon = now + chrono::Duration::days(i64::from(days));
+    meetings
+        .into_iter()
+        .filter(|m| !m.is_all_day)
+        .filter(|m| m.attendance_status != AttendanceStatus::Declined)
+        .filter(|m| m.end > now && m.start < horizon)
+        .map(|m| CalendarEventBlock {
+            color: color_for(&m.calendar_uid),
+            start: m.start,
+            end: m.end,
+            title: m.title,
+        })
+        .collect()
+}
+
 #[allow(clippy::too_many_lines)]
 async fn get_meetings_from_dbus(
     conn: &Connection,

@@ -143,6 +143,11 @@ pub struct Config {
     pub calendar_app_url: String,
     /// Whether to hide the applet from the panel when there are no meetings.
     pub hide_when_no_meetings: bool,
+    /// Whether to show the "Scheduling Helper" entry in the menu (off by default).
+    pub scheduling_helper_enabled: bool,
+    /// Whether the Scheduling Helper opens as a resizable window instead of a
+    /// fixed-size popup (which floats as a dialog under tiling WMs).
+    pub scheduling_helper_resizable: bool,
 }
 
 impl Default for Config {
@@ -181,6 +186,8 @@ impl Default for Config {
             calendar_app_command: "gnome-calendar".to_string(),
             calendar_app_url: "https://calendar.google.com".to_string(),
             hide_when_no_meetings: false,
+            scheduling_helper_enabled: false,
+            scheduling_helper_resizable: false,
         }
     }
 }

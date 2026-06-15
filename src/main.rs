@@ -5,13 +5,24 @@ mod calendar;
 mod config;
 mod formatting;
 mod i18n;
+mod ipc;
+mod locale;
+mod scheduling;
+mod scheduling_app;
 mod widgets;
 
 fn main() -> cosmic::iced::Result {
-    // Check for --join-next flag
     let args: Vec<String> = std::env::args().collect();
+
+    // Check for --join-next flag
     if args.iter().any(|arg| arg == "--join-next") {
         std::process::exit(join_next_meeting());
+    }
+
+    // Ask the running applet to open its panel popup over D-Bus.
+    if args.iter().any(|arg| arg == "--open-menu") {
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+        std::process::exit(i32::from(!rt.block_on(ipc::open_menu())));
     }
 
     // Get the system's preferred languages.
@@ -19,6 +30,13 @@ fn main() -> cosmic::iced::Result {
 
     // Enable localizations to be applied.
     i18n::init(&requested_languages);
+
+    // The Scheduling Helper runs as its own floating window process so it behaves
+    // correctly under tiling WMs (a window opened from the layer-shell applet
+    // shows up as a stray background surface).
+    if args.iter().any(|arg| arg == "--scheduling-helper") {
+        return scheduling_app::run();
+    }
 
     // Starts the applet's event loop with `()` as the application's flags.
     cosmic::applet::run::<app::AppModel>(())

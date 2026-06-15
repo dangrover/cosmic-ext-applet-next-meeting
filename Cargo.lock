@@ -981,6 +981,7 @@ dependencies = [
  "futures-util",
  "i18n-embed",
  "i18n-embed-fl",
+ "libc",
  "libcosmic",
  "localzone",
  "regex",

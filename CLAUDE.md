@@ -37,8 +37,11 @@ The app uses these D-Bus services (declared in `com.dangrover.next-meeting-app.j
 | `org.gnome.evolution.dataserver.Sources5` | Session | List available calendar sources |
 | `org.gnome.OnlineAccounts` | Session | Access GNOME Online Accounts integration |
 | `org.freedesktop.login1` | System | Detect system wake and session unlock to refresh events immediately |
+| `com.dangrover.next-meeting-app` (own) | Session | Serve a `Control` interface so a `--open-menu` invocation (e.g. a keyboard shortcut) can open the panel popup |
 
 The `login1` permission allows the app to listen for `PrepareForSleep` and session `Unlock` signals, so calendar data refreshes as soon as the user returns to their computer (after sleep or screen lock). This provides a better experience than waiting for the next polling interval.
+
+The applet *owns* its own bus name (`--own-name` in the manifest) to serve a small `Control` interface (`OpenMenu`). The CLI flags `--join-next`, `--scheduling-helper`, and `--open-menu` are the actions exposed on the keyboard-shortcut page; the first two run and exit, while `--open-menu` signals the already-running applet over this interface (see `src/ipc.rs`).
 
 ## Build Commands
 
@@ -86,6 +89,17 @@ Subscriptions run in background: calendar refresh (60s interval) and config watc
 ## Localization
 
 Translations use Fluent format in `i18n/<lang>/cosmic_ext_applet_next_meeting.ftl`. Add new languages by copying `i18n/en/` directory. Use `fl!("message-id")` macro in code.
+
+### Honor the user's locale (applies to every feature)
+
+Always respect the user's locale settings — never hardcode US/English conventions. When adding any feature that displays user-facing strings, dates, times, or numbers:
+
+- **No hardcoded English** in code: every visible string goes through `fl!(...)` (Fluent), including text the user copies/shares (e.g. composed messages), not just static UI labels.
+- **12h vs 24h clock**: format times according to the locale, not a fixed `AM/PM`. Use `crate::locale::format_time` / `hour_axis_label` (backed by POSIX `nl_langinfo(T_FMT)`), which fall back gracefully when the locale can't be read (e.g. a minimal Flatpak sandbox).
+- **Localized day/month names**: use `crate::locale` helpers (`day_header`, `short_date`, `long_date`) rather than chrono's English `%a`/`%b`/`%A`.
+- **Other locale-sensitive conventions** (first day of week, number/decimal formatting, etc.) should follow the locale too where relevant.
+
+The `src/locale.rs` module centralizes this; extend it rather than re-deriving locale logic per feature.
 
 ## Key Dependencies
 
