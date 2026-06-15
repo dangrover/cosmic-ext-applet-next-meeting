@@ -21,6 +21,8 @@
     clippy::cast_sign_loss
 )]
 
+use std::collections::BTreeSet;
+
 use chrono::{DateTime, Datelike, Local, NaiveDate, Timelike, Weekday};
 
 use cosmic::iced::{Alignment, Color, Length, Limits, Point, Rectangle, Size, mouse};
@@ -28,11 +30,13 @@ use cosmic::prelude::*;
 use cosmic::widget::canvas::{self, Frame, Geometry, Path, Stroke, Text};
 use cosmic::widget::{self};
 
-use crate::calendar::CalendarEventBlock;
+use crate::calendar::{CalendarEventBlock, CalendarInfo};
 use crate::fl;
 use crate::formatting::parse_hex_color;
 use crate::scheduling::{self, Span};
-use crate::widgets::{secondary_text_style, spacing};
+use crate::widgets::{
+    calendar_color_dot, secondary_text_style, settings_nav_row, settings_page_header, spacing,
+};
 
 const APP_ID: &str = "com.dangrover.next-meeting-app";
 /// How many days of events to fetch up front (covers several weeks of paging).
@@ -73,6 +77,10 @@ pub fn run() -> cosmic::iced::Result {
             .size_limits(limits)
             .resizable(Some(1.0))
     } else {
+        // Fixed-size floating dialog: `min == max` plus `resizable(None)` hints
+        // the compositor to float it rather than tile it. The trade-off is that a
+        // non-resizable window is clamped to this size, so maximizing it won't
+        // reflow the content — the resizable mode is for that.
         let limits = Limits::NONE
             .min_width(980.0)
             .max_width(980.0)
@@ -102,24 +110,44 @@ pub struct SchedulingApp {
     include_weekends: bool,
     /// Which week is visible (0 = the rolling week starting today).
     week_offset: u32,
-    /// Calendar events to display as blocks.
+    /// All fetched calendar events.
     events: Vec<CalendarEventBlock>,
+    /// Events filtered to the currently selected calendars (what the grid shows).
+    visible_events: Vec<CalendarEventBlock>,
+    /// Meeting-source calendars available from EDS (for the calendar picker).
+    calendars: Vec<CalendarInfo>,
+    /// Calendar UIDs currently checked in the picker (default: all enabled).
+    selected_calendars: BTreeSet<String>,
     /// User-selected availability spans.
     availability: Vec<Span>,
     /// Whether events are still loading.
     loading: bool,
-    /// Whether the options popover (hours/weekends) is open.
+    /// Whether the options popover is open.
     show_options: bool,
+    /// Which page the options popover is showing.
+    options_page: OptionsPage,
+}
+
+/// Pages within the options popover (a small drill-down, like the menu).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum OptionsPage {
+    #[default]
+    Main,
+    Calendars,
 }
 
 #[derive(Debug, Clone)]
 pub enum Msg {
     EventsLoaded(Vec<CalendarEventBlock>),
+    CalendarsLoaded(Vec<CalendarInfo>),
+    ToggleCalendar(String),
     SetDayStart(u32),
     SetDayEnd(u32),
     SetWeekends(bool),
     ToggleOptions,
     CloseOptions,
+    OpenCalendarsPage,
+    OptionsBack,
     PrevWeek,
     NextWeek,
     AddAvailability(DateTime<Local>, DateTime<Local>),
@@ -172,7 +200,7 @@ impl SchedulingApp {
         for date in self.visible_days() {
             // Busy intervals from events on this day, clamped to the day window.
             let mut busy: Vec<(i32, i32)> = self
-                .events
+                .visible_events
                 .iter()
                 .filter_map(|e| {
                     if e.start.date_naive() != date {
@@ -225,6 +253,27 @@ impl SchedulingApp {
         self.availability = scheduling::merge_spans(&self.availability);
     }
 
+    /// Whether a calendar is enabled in the applet (empty config list = all
+    /// meeting sources enabled). Disabled calendars show greyed-out and locked.
+    fn is_calendar_enabled(&self, uid: &str) -> bool {
+        self.enabled_uids.is_empty() || self.enabled_uids.iter().any(|u| u == uid)
+    }
+
+    /// Recompute the events shown in the grid from the selected-calendar set.
+    fn recompute_visible_events(&mut self) {
+        if self.calendars.is_empty() {
+            // Calendar list not loaded yet — show everything fetched.
+            self.visible_events = self.events.clone();
+        } else {
+            self.visible_events = self
+                .events
+                .iter()
+                .filter(|e| self.selected_calendars.contains(&e.calendar_uid))
+                .cloned()
+                .collect();
+        }
+    }
+
     /// Build the task that fetches calendar events for the grid.
     fn events_task(&self) -> Task<cosmic::Action<Msg>> {
         let enabled = self.enabled_uids.clone();
@@ -232,6 +281,124 @@ impl SchedulingApp {
         Task::perform(
             async move { crate::calendar::get_event_blocks(&enabled, &emails, FETCH_DAYS).await },
             |events| Msg::EventsLoaded(events).into(),
+        )
+    }
+
+    /// Main page of the options popover: hours, weekends, and a Calendars nav row.
+    fn options_main_page(&self) -> Element<'_, Msg> {
+        let space = spacing();
+        let start_options: Vec<String> = (0..24).map(crate::locale::hour_axis_label).collect();
+        let end_options: Vec<String> = (1..=24).map(crate::locale::hour_axis_label).collect();
+        let start_idx = usize::try_from(self.day_start_hour).ok();
+        let end_idx = usize::try_from(self.day_end_hour.saturating_sub(1)).ok();
+
+        let total = self.calendars.len();
+        let enabled_count = self
+            .calendars
+            .iter()
+            .filter(|c| self.is_calendar_enabled(&c.uid))
+            .count();
+        let summary = if total > 0 && self.selected_calendars.len() == enabled_count {
+            fl!("calendars-all")
+        } else {
+            fl!(
+                "calendars-summary",
+                selected = self.selected_calendars.len(),
+                total = total
+            )
+        };
+
+        widget::list_column()
+            .list_item_padding([space.space_xxs, space.space_xs])
+            .add(
+                widget::row::with_capacity(5)
+                    .spacing(space.space_xs)
+                    .align_y(Alignment::Center)
+                    .width(Length::Fill)
+                    .push(widget::text::body(fl!("range-label")))
+                    .push(widget::space::horizontal())
+                    .push(widget::dropdown(start_options, start_idx, |i| {
+                        Msg::SetDayStart(u32::try_from(i).unwrap_or(9))
+                    }))
+                    .push(widget::text::body("–"))
+                    .push(widget::dropdown(end_options, end_idx, |i| {
+                        Msg::SetDayEnd(u32::try_from(i).unwrap_or(16) + 1)
+                    })),
+            )
+            .add(
+                widget::row::with_capacity(3)
+                    .spacing(space.space_s)
+                    .align_y(Alignment::Center)
+                    .width(Length::Fill)
+                    .push(widget::text::body(fl!("weekends-label")))
+                    .push(widget::space::horizontal())
+                    .push(widget::toggler(self.include_weekends).on_toggle(Msg::SetWeekends)),
+            )
+            .add(settings_nav_row(
+                fl!("calendars-label"),
+                summary,
+                Msg::OpenCalendarsPage,
+            ))
+            .into()
+    }
+
+    /// Calendars sub-page: a list of calendars with color pucks and togglers.
+    /// Enabled calendars are checked by default and togglable; disabled ones are
+    /// greyed out and locked.
+    fn options_calendars_page(&self) -> Element<'_, Msg> {
+        let space = spacing();
+        let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
+
+        let mut list = widget::list_column().list_item_padding([space.space_xxs, space.space_xs]);
+        for cal in &self.calendars {
+            let enabled = self.is_calendar_enabled(&cal.uid);
+            let checked = self.selected_calendars.contains(&cal.uid);
+            let puck: Element<'_, Msg> =
+                calendar_color_dot::<Msg>(&cal.uid, &self.calendars, 12.0, None).unwrap_or_else(
+                    || {
+                        widget::container(widget::Space::new())
+                            .width(Length::Fixed(12.0))
+                            .height(Length::Fixed(12.0))
+                            .into()
+                    },
+                );
+            // Fill-width name pushes every toggler to the same right edge.
+            let mut name = widget::text::body(cal.display_name.clone()).width(Length::Fill);
+            if !enabled {
+                name = name.class(secondary_text);
+            }
+            let mut tog = widget::toggler(enabled && checked);
+            if enabled {
+                let uid = cal.uid.clone();
+                tog = tog.on_toggle(move |_| Msg::ToggleCalendar(uid.clone()));
+            }
+            list = list.add(
+                widget::row::with_capacity(3)
+                    .spacing(space.space_xs)
+                    .align_y(Alignment::Center)
+                    .width(Length::Fill)
+                    .push(puck)
+                    .push(name)
+                    .push(tog),
+            );
+        }
+
+        widget::column::with_capacity(2)
+            .spacing(space.space_s)
+            .push(settings_page_header(
+                fl!("scheduling-options"),
+                fl!("calendars-label"),
+                Msg::OptionsBack,
+            ))
+            .push(widget::container(widget::scrollable(list).width(Length::Fill)).max_height(260.0))
+            .into()
+    }
+
+    /// Build the task that fetches the available calendars (for the picker).
+    fn calendars_task() -> Task<cosmic::Action<Msg>> {
+        Task::perform(
+            async { crate::calendar::get_available_calendars().await },
+            |discovery| Msg::CalendarsLoaded(discovery.calendars).into(),
         )
     }
 }
@@ -261,9 +428,13 @@ impl cosmic::Application for SchedulingApp {
             include_weekends: false,
             week_offset: 0,
             events: Vec::new(),
+            visible_events: Vec::new(),
+            calendars: Vec::new(),
+            selected_calendars: BTreeSet::new(),
             availability: Vec::new(),
             loading: true,
             show_options: false,
+            options_page: OptionsPage::Main,
         };
 
         app.set_header_title(fl!("scheduling-helper"));
@@ -272,7 +443,10 @@ impl cosmic::Application for SchedulingApp {
         });
         let events_task = app.events_task();
 
-        (app, Task::batch([title_task, events_task]))
+        (
+            app,
+            Task::batch([title_task, events_task, Self::calendars_task()]),
+        )
     }
 
     fn on_close_requested(&self, _id: cosmic::iced::window::Id) -> Option<Msg> {
@@ -284,6 +458,30 @@ impl cosmic::Application for SchedulingApp {
             Msg::EventsLoaded(events) => {
                 self.events = events;
                 self.loading = false;
+                self.recompute_visible_events();
+            }
+            Msg::CalendarsLoaded(calendars) => {
+                self.calendars = calendars
+                    .into_iter()
+                    .filter(CalendarInfo::is_meeting_source)
+                    .collect();
+                // Default: every enabled calendar is checked.
+                self.selected_calendars = self
+                    .calendars
+                    .iter()
+                    .filter(|c| self.is_calendar_enabled(&c.uid))
+                    .map(|c| c.uid.clone())
+                    .collect();
+                self.recompute_visible_events();
+            }
+            Msg::ToggleCalendar(uid) => {
+                // Only enabled calendars can be toggled.
+                if self.is_calendar_enabled(&uid) {
+                    if !self.selected_calendars.remove(&uid) {
+                        self.selected_calendars.insert(uid);
+                    }
+                    self.recompute_visible_events();
+                }
             }
             Msg::SetDayStart(hour) => {
                 self.day_start_hour = hour;
@@ -298,8 +496,15 @@ impl cosmic::Application for SchedulingApp {
                 }
             }
             Msg::SetWeekends(enabled) => self.include_weekends = enabled,
-            Msg::ToggleOptions => self.show_options = !self.show_options,
+            Msg::ToggleOptions => {
+                self.show_options = !self.show_options;
+                if self.show_options {
+                    self.options_page = OptionsPage::Main;
+                }
+            }
             Msg::CloseOptions => self.show_options = false,
+            Msg::OpenCalendarsPage => self.options_page = OptionsPage::Calendars,
+            Msg::OptionsBack => self.options_page = OptionsPage::Main,
             Msg::PrevWeek => self.week_offset = self.week_offset.saturating_sub(1),
             Msg::NextWeek => self.week_offset = (self.week_offset + 1).min(MAX_WEEK_OFFSET),
             Msg::AddAvailability(start, end) => {
@@ -365,39 +570,14 @@ impl cosmic::Application for SchedulingApp {
             .on_press(Msg::ToggleOptions);
         let mut options = widget::popover(gear).position(widget::popover::Position::Bottom);
         if self.show_options {
-            let start_options: Vec<String> = (0..24).map(crate::locale::hour_axis_label).collect();
-            let end_options: Vec<String> = (1..=24).map(crate::locale::hour_axis_label).collect();
-            let start_idx = usize::try_from(self.day_start_hour).ok();
-            let end_idx = usize::try_from(self.day_end_hour.saturating_sub(1)).ok();
-            let panel = widget::container(
-                widget::column::with_capacity(3)
-                    .spacing(space.space_s)
-                    .push(labeled_control(
-                        fl!("from-label"),
-                        widget::dropdown(start_options, start_idx, |i| {
-                            Msg::SetDayStart(u32::try_from(i).unwrap_or(9))
-                        }),
-                    ))
-                    .push(labeled_control(
-                        fl!("to-label"),
-                        widget::dropdown(end_options, end_idx, |i| {
-                            Msg::SetDayEnd(u32::try_from(i).unwrap_or(16) + 1)
-                        }),
-                    ))
-                    .push(
-                        widget::row::with_capacity(3)
-                            .spacing(space.space_s)
-                            .align_y(Alignment::Center)
-                            .push(widget::text::body(fl!("weekends-label")))
-                            .push(widget::space::horizontal())
-                            .push(
-                                widget::toggler(self.include_weekends).on_toggle(Msg::SetWeekends),
-                            ),
-                    ),
-            )
-            .padding(space.space_s)
-            .width(Length::Fixed(240.0))
-            .class(cosmic::theme::Container::Dialog);
+            let panel_inner = match self.options_page {
+                OptionsPage::Main => self.options_main_page(),
+                OptionsPage::Calendars => self.options_calendars_page(),
+            };
+            let panel = widget::container(panel_inner)
+                .padding(space.space_s)
+                .width(Length::Fixed(320.0))
+                .class(cosmic::theme::Container::Dialog);
             options = options.popup(panel).on_close(Msg::CloseOptions);
         }
 
@@ -428,7 +608,7 @@ impl cosmic::Application for SchedulingApp {
                 days,
                 day_start_hour: self.day_start_hour,
                 day_end_hour: self.day_end_hour,
-                events: &self.events,
+                events: &self.visible_events,
                 availability: &self.availability,
             })
             .width(Length::Fill)
@@ -467,8 +647,24 @@ impl cosmic::Application for SchedulingApp {
                 .into()
         };
 
-        let mut copy_button = widget::button::suggested(fl!("scheduling-copy"))
-            .leading_icon(widget::icon::from_name("edit-copy-symbolic"));
+        // Copy is the primary action, ~1.5x the width of a standard button, with
+        // its icon + label centered. (A fixed-width `button::suggested` would
+        // left-align them, so build the content and center it explicitly; the
+        // Suggested class still colors the icon/text correctly.)
+        let copy_inner = widget::container(
+            widget::row::with_capacity(2)
+                .spacing(space.space_xxs)
+                .align_y(Alignment::Center)
+                .push(widget::icon::from_name("edit-copy-symbolic").size(16))
+                .push(widget::text::body(fl!("scheduling-copy"))),
+        )
+        .center(Length::Fill);
+        // Match the text buttons: they use a fixed height of `space_l`.
+        let mut copy_button = widget::button::custom(copy_inner)
+            .class(cosmic::theme::Button::Suggested)
+            .width(Length::Fixed(150.0))
+            .height(Length::Fixed(f32::from(space.space_l)))
+            .padding([0.0, f32::from(space.space_s)]);
         if has_text {
             copy_button = copy_button.on_press(Msg::Copy);
         }
@@ -1319,14 +1515,4 @@ fn local_dt(date: NaiveDate, minute_of_day: i32) -> DateTime<Local> {
     date.and_hms_opt((mins / 60) as u32, (mins % 60) as u32, 0)
         .and_then(|naive| naive.and_local_timezone(Local).earliest())
         .unwrap_or_else(Local::now)
-}
-
-/// A small control with a caption above it, used in the toolbar.
-fn labeled_control<'a>(label: String, control: impl Into<Element<'a, Msg>>) -> Element<'a, Msg> {
-    let space = spacing();
-    widget::column::with_capacity(2)
-        .spacing(space.space_xxxs)
-        .push(widget::text::caption(label))
-        .push(control)
-        .into()
 }

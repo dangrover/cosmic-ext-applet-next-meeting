@@ -628,6 +628,8 @@ pub struct CalendarEventBlock {
     pub title: String,
     /// Calendar color as a hex string (e.g. `#aabbcc`), if the source has one.
     pub color: Option<String>,
+    /// UID of the calendar this event belongs to (for filtering by calendar).
+    pub calendar_uid: String,
 }
 
 /// Fetch timed calendar events over the next `days` to draw as blocks in the
@@ -661,6 +663,7 @@ pub async fn get_event_blocks(
         .filter(|m| m.end > now && m.start < horizon)
         .map(|m| CalendarEventBlock {
             color: color_for(&m.calendar_uid),
+            calendar_uid: m.calendar_uid,
             start: m.start,
             end: m.end,
             title: m.title,
