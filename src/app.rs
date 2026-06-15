@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-use crate::calendar::{CalendarInfo, Meeting, extract_meeting_url, get_physical_location};
+use crate::calendar::{
+    CalendarDiscovery, CalendarInfo, Meeting, extract_meeting_url, get_physical_location,
+};
 use crate::config::{Config, DisplayFormat, InProgressMeeting, JoinButtonVisibility};
 use crate::fl;
 use crate::formatting::{
@@ -40,6 +42,12 @@ pub struct AppModel {
     is_refreshing: bool,
     /// Whether the initial meeting fetch has completed.
     has_loaded_meetings: bool,
+    /// Whether Evolution Data Server is available on the session bus.
+    /// `false` means EDS appears to be missing (not installed or not running),
+    /// which calls for different guidance than "no calendars configured".
+    /// Defaults to `true` so we don't flash a "not installed" message before
+    /// the first calendar discovery completes.
+    eds_available: bool,
     /// Online accounts that need re-authentication.
     accounts_needing_attention: Vec<crate::calendar::AccountNeedingAttention>,
 }
@@ -361,19 +369,42 @@ impl AppModel {
                 "loading-meetings"
             ))));
         } else if self.available_calendars.is_empty() {
-            // No calendars configured - show prominent centered message
+            // No calendars configured - show prominent centered message.
+            // Distinguish "EDS not installed" from "EDS present, no calendars".
             let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
+            let (title, description) = if self.eds_available {
+                (fl!("no-calendars"), fl!("no-calendars-description"))
+            } else {
+                (
+                    fl!("no-calendar-service"),
+                    fl!("no-calendar-service-description"),
+                )
+            };
 
-            let no_cal_content = widget::column::with_capacity(3)
+            // Keep the icon and heading tightly grouped, then leave a larger
+            // gap before the centered body text.
+            let heading = widget::column::with_capacity(2)
                 .spacing(space.space_xxs)
                 .align_x(cosmic::iced::Alignment::Center)
                 .push(widget::icon::from_name("dialog-warning-symbolic").size(space.space_l))
-                .push(widget::text::title4(fl!("no-calendars")))
-                .push(widget::text::body(fl!("no-calendars-description")).class(secondary_text));
+                .push(widget::text::title4(title));
+
+            let no_cal_content = widget::column::with_capacity(2)
+                .spacing(space.space_m)
+                .align_x(cosmic::iced::Alignment::Center)
+                .width(Length::Fill)
+                .push(heading)
+                .push(
+                    widget::text::body(description)
+                        .class(secondary_text)
+                        .width(Length::Fill)
+                        .align_x(cosmic::iced::alignment::Horizontal::Center)
+                        .wrapping(cosmic::iced::widget::text::Wrapping::Word),
+                );
 
             content = content.push(
                 widget::container(no_cal_content)
-                    .padding([space.space_s, space.space_s])
+                    .padding([space.space_l, space.space_l])
                     .width(Length::Fill)
                     .align_x(cosmic::iced::alignment::Horizontal::Center),
             );
@@ -752,10 +783,14 @@ impl AppModel {
         }
 
         if self.available_calendars.is_empty() {
-            // No calendars - show explanation
+            // No calendars - show explanation tailored to whether EDS is present
             let secondary_text = cosmic::theme::Text::Custom(secondary_text_style);
-            content = content
-                .push(widget::text::body(fl!("no-calendars-description")).class(secondary_text));
+            let description = if self.eds_available {
+                fl!("no-calendars-description")
+            } else {
+                fl!("no-calendar-service-description")
+            };
+            content = content.push(widget::text::body(description).class(secondary_text));
         } else {
             content = content.push(calendars_list);
 
@@ -1806,7 +1841,7 @@ pub enum Message {
     PopupClosed(Id),
     UpdateConfig(Config),
     MeetingsUpdated(Vec<Meeting>),
-    CalendarsLoaded(Vec<CalendarInfo>),
+    CalendarsLoaded(CalendarDiscovery),
     ToggleCalendar(String),
     SelectDisplayFormat(usize),
     SetUpcomingEventsCount(i32),
@@ -1895,6 +1930,8 @@ impl cosmic::Application for AppModel {
             core,
             config,
             config_context,
+            // Assume EDS is present until discovery proves otherwise.
+            eds_available: true,
             ..Default::default()
         };
 
@@ -2075,12 +2112,18 @@ impl cosmic::Application for AppModel {
                 widget::row::with_capacity(1).push(self.core.applet.text(fl!("loading-meetings")));
             (content, None)
         } else if self.available_calendars.is_empty() {
-            // No calendars configured - show warning
+            // No calendars configured - show warning. Use a shorter label when
+            // EDS itself is missing so the panel stays compact.
+            let label = if self.eds_available {
+                fl!("no-calendars")
+            } else {
+                fl!("no-calendar-service")
+            };
             let content = widget::row::with_capacity(2)
                 .spacing(space.space_xxs)
                 .align_y(cosmic::iced::Alignment::Center)
                 .push(widget::icon::from_name("dialog-warning-symbolic").size(space.space_s))
-                .push(self.core.applet.text(fl!("no-calendars")));
+                .push(self.core.applet.text(label));
             (content, None)
         } else {
             let content =
@@ -2353,7 +2396,12 @@ impl cosmic::Application for AppModel {
                 self.upcoming_meetings = meetings;
                 self.has_loaded_meetings = true;
             }
-            Message::CalendarsLoaded(calendars) => {
+            Message::CalendarsLoaded(discovery) => {
+                let CalendarDiscovery {
+                    eds_available,
+                    calendars,
+                } = discovery;
+                self.eds_available = eds_available;
                 // Auto-enable newly discovered meeting-source calendars
                 // (only when the user has explicitly selected calendars; if the
                 // list is empty, all calendars are already implicitly enabled)

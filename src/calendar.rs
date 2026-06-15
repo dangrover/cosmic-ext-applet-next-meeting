@@ -72,6 +72,21 @@ pub struct AccountNeedingAttention {
     pub identity: String,
 }
 
+/// Result of attempting to discover calendars from Evolution Data Server.
+///
+/// Distinguishes between "EDS isn't available" (not installed or not running)
+/// and "EDS is available but no calendars are configured". These need different
+/// guidance shown to the user, so we keep them separate rather than collapsing
+/// both into an empty list.
+#[derive(Debug, Clone, Default)]
+pub struct CalendarDiscovery {
+    /// Whether Evolution Data Server responded on the session bus at all.
+    /// `false` means EDS is likely not installed or not running.
+    pub eds_available: bool,
+    /// The calendars that were discovered (empty when none are configured).
+    pub calendars: Vec<CalendarInfo>,
+}
+
 /// Check GNOME Online Accounts for any calendar-enabled accounts that need
 /// attention (expired credentials, etc.).
 pub async fn check_accounts_needing_attention() -> Vec<AccountNeedingAttention> {
@@ -151,17 +166,33 @@ pub async fn check_accounts_needing_attention() -> Vec<AccountNeedingAttention> 
 }
 
 /// Fetch available calendars from Evolution Data Server via D-Bus
-pub async fn get_available_calendars() -> Vec<CalendarInfo> {
-    // Debug: simulate no calendars for testing
+pub async fn get_available_calendars() -> CalendarDiscovery {
+    // Debug: simulate EDS being present but with no calendars configured.
     if std::env::var("DEBUG_NO_CALENDARS").is_ok() {
-        return Vec::new();
+        return CalendarDiscovery {
+            eds_available: true,
+            calendars: Vec::new(),
+        };
+    }
+    // Debug: simulate Evolution Data Server not being installed/running.
+    if std::env::var("DEBUG_NO_EDS").is_ok() {
+        return CalendarDiscovery::default();
     }
 
     let Ok(conn) = Connection::session().await else {
-        return Vec::new();
+        return CalendarDiscovery::default();
     };
 
-    get_calendars_from_dbus(&conn).await.unwrap_or_default()
+    // `get_calendars_from_dbus` returns `None` only when EDS itself couldn't be
+    // reached (service not activatable, call failed). An EDS that's present but
+    // has no calendars returns `Some(empty)`, which is a distinct, valid state.
+    match get_calendars_from_dbus(&conn).await {
+        Some(calendars) => CalendarDiscovery {
+            eds_available: true,
+            calendars,
+        },
+        None => CalendarDiscovery::default(),
+    }
 }
 
 /// Ask EDS to re-discover calendars from all collection/account backends.
