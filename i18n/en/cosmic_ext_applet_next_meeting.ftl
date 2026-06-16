@@ -52,6 +52,7 @@ time-in-hours = in { $hours }h
 time-in-minutes = in { $minutes }m
 panel-time-location = ({ $time } in { $location })
 panel-time = ({ $time })
+panel-show-icon = Show icon
 calendar-indicator-section = Indicate parent calendar
 calendar-indicator-description = When enabled, a colored dot indicating which calendar the meeting is from will be shown.
 panel-indicator = In panel

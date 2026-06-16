@@ -116,6 +116,8 @@ pub struct Config {
     pub popup_show_location: bool,
     /// Whether to show the physical location in the panel.
     pub panel_show_location: bool,
+    /// Show the app icon to the left of the panel text.
+    pub panel_show_icon: bool,
     /// Show calendar color indicator in panel.
     pub panel_calendar_indicator: bool,
     /// Show calendar color indicator in popup.
@@ -162,6 +164,7 @@ impl Default for Config {
             panel_join_button: JoinButtonVisibility::ShowIf15m,
             popup_show_location: false,
             panel_show_location: false,
+            panel_show_icon: false,
             panel_calendar_indicator: false,
             popup_calendar_indicator: true,
             meeting_url_patterns: vec![

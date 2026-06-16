@@ -1128,6 +1128,18 @@ impl AppModel {
 
         let formatting_list = widget::list_column()
             .list_item_padding([space.space_xxs, space.space_xs])
+            // Show app icon toggle
+            .add(
+                widget::row::with_capacity(3)
+                    .push(widget::text::body(fl!("panel-show-icon")))
+                    .push(widget::space::horizontal())
+                    .push(
+                        widget::toggler(self.config.panel_show_icon)
+                            .on_toggle(Message::SetPanelShowIcon),
+                    )
+                    .align_y(cosmic::iced::Alignment::Center)
+                    .width(Length::Fill),
+            )
             // Display format dropdown
             .add(
                 widget::row::with_capacity(3)
@@ -2016,6 +2028,7 @@ pub enum Message {
     SetPanelJoinButton(usize),
     SetPopupShowLocation(bool),
     SetPanelShowLocation(bool),
+    SetPanelShowIcon(bool),
     SetPanelCalendarIndicator(bool),
     SetPopupCalendarIndicator(bool),
     UpdatePattern(usize, String),
@@ -2302,9 +2315,22 @@ impl cosmic::Application for AppModel {
             (content, None)
         };
 
-        // Main panel button with meeting text
+        // Main panel button with meeting text, optionally preceded by the app icon
+        let inner_content = if self.config.panel_show_icon {
+            widget::row::with_capacity(2)
+                .spacing(space.space_xxs)
+                .align_y(cosmic::iced::Alignment::Center)
+                .push(
+                    widget::icon::from_name("com.dangrover.next-meeting-app-symbolic")
+                        .size(space.space_m),
+                )
+                .push(panel_content)
+                .into()
+        } else {
+            Element::from(panel_content)
+        };
         let constrained_content =
-            widget::container(panel_content).padding([space.space_none, space.space_xs]);
+            widget::container(inner_content).padding([space.space_none, space.space_xs]);
         let main_button = widget::button::custom(constrained_content)
             .class(cosmic::theme::Button::AppletIcon)
             .on_press(Message::TogglePopup);
@@ -2751,6 +2777,10 @@ impl cosmic::Application for AppModel {
             }
             Message::SetPanelShowLocation(enabled) => {
                 self.config.panel_show_location = enabled;
+                self.save_config();
+            }
+            Message::SetPanelShowIcon(enabled) => {
+                self.config.panel_show_icon = enabled;
                 self.save_config();
             }
             Message::SetPanelCalendarIndicator(enabled) => {
