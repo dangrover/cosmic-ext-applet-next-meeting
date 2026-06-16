@@ -652,12 +652,6 @@ impl AppModel {
                 fl!("refresh-section"),
                 refresh_summary,
                 Message::Navigate(PopupPage::RefreshSettings),
-            ))
-            .add(settings_nav_row_with_icon(
-                "office-calendar-symbolic",
-                fl!("calendar-app-section"),
-                String::new(),
-                Message::Navigate(PopupPage::CalendarAppSettings),
             ));
 
         content = content.push(calendars_section);
@@ -700,7 +694,7 @@ impl AppModel {
         content = content.push(features_section);
         content = content.push(widget::space::vertical().height(space.space_xs));
 
-        // ===== KEYBOARD SHORTCUT SECTION =====
+        // ===== KEYBOARD SHORTCUT & CALENDAR APP SECTION =====
         let shortcut_section = widget::list_column()
             .list_item_padding([space.space_xxs, space.space_xs])
             .add(settings_nav_row_with_icon(
@@ -708,6 +702,12 @@ impl AppModel {
                 fl!("keyboard-shortcut"),
                 String::new(),
                 Message::Navigate(PopupPage::KeyboardShortcut),
+            ))
+            .add(settings_nav_row_with_icon(
+                "office-calendar-symbolic",
+                fl!("calendar-app-section"),
+                String::new(),
+                Message::Navigate(PopupPage::CalendarAppSettings),
             ));
 
         content = content.push(shortcut_section);
@@ -1815,7 +1815,8 @@ impl AppModel {
 
         content = content.push(widget::space::vertical().height(space.space_xs));
 
-        // Action picker: which command the shortcut should run.
+        // Action picker: which command the shortcut should run. A full-width
+        // dropdown under an "Action" label.
         let actions = self.available_shortcut_actions();
         let selected = actions
             .iter()
@@ -1823,17 +1824,10 @@ impl AppModel {
             .unwrap_or(0);
         let action = actions.get(selected).copied().unwrap_or_default();
         let action_options: Vec<String> = actions.iter().map(|a| a.label()).collect();
+        content = content.push(widget::text::body(fl!("shortcut-action-label")));
         content = content.push(
-            widget::row::with_capacity(3)
-                .spacing(space.space_s)
-                .align_y(cosmic::iced::Alignment::Center)
-                .push(widget::text::body(fl!("shortcut-action-label")))
-                .push(widget::space::horizontal())
-                .push(widget::dropdown(
-                    action_options,
-                    Some(selected),
-                    Message::SetShortcutAction,
-                )),
+            widget::dropdown(action_options, Some(selected), Message::SetShortcutAction)
+                .width(Length::Fill),
         );
 
         content = content.push(widget::space::vertical().height(space.space_xs));
